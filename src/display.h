@@ -66,5 +66,6 @@ const char* S9xGetSnapshotDirectory();
 const char* S9xGetROMDirectory();
 const char* S9xGetSRAMFilename();
 const char* S9xGetFilename(const char* extension);
+const char* S9xChooseFilename (bool8);
 
 #endif

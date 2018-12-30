@@ -289,6 +289,8 @@ typedef struct
    bool8  SRTC;
    uint32 ControllerOption;
 
+   bool8  JustifierMaster;
+   bool8  MacsRifleMaster;
    bool8  ShutdownMaster;
    bool8  MultiPlayer5Master;
    bool8  SuperScopeMaster;

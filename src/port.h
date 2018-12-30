@@ -62,7 +62,9 @@ I can't take it anymore, it's too convoluted.  So I've commented out the entire
 #include <limits.h>
 #include <string.h>
 
+#ifndef __cplusplus
 #include <boolean.h>
+#endif
 #include <retro_inline.h>
 
 //Types Defined
@@ -97,6 +99,11 @@ typedef short        int16_32;
 #ifndef _MAX_PATH
 #define _MAX_PATH	PATH_MAX
 #endif
+
+#define _MAX_DIR	PATH_MAX
+#define _MAX_FNAME	PATH_MAX
+#define _MAX_EXT	PATH_MAX
+#define _MAX_PATH	PATH_MAX
 
 //True/False Defines
 #define TRUE 1
