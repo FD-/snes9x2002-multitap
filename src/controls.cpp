@@ -2755,6 +2755,7 @@ uint8 S9xReadJOYSERn (int n)
 		n -= 0x4016;
 	assert(n == 0 || n == 1);
 
+    uint8   OpenBus = 0; // TOOD: Fix this?
 	uint8	bits = (OpenBus & ~3) | ((n == 1) ? 0x1c : 0);
 
 	if (FLAG_LATCH)
@@ -2905,8 +2906,6 @@ void S9xDoAutoJoypad (void)
 	S9xSetJoypadLatch(1);
 	S9xSetJoypadLatch(0);
 
-	S9xMovieUpdate(false);
-
 	for (int n = 0; n < 2; n++)
 	{
 		switch (i = curcontrollers[n])
@@ -2978,9 +2977,6 @@ void S9xControlEOF (void)
 	struct crosshair	*c;
 	int					i, j;
 
-	PPU.GunVLatch = 1000; // i.e., never latch
-	PPU.GunHLatch = 0;
-
 	for (int n = 0; n < 2; n++)
 	{
 		switch (i = curcontrollers[n])
@@ -3019,64 +3015,23 @@ void S9xControlEOF (void)
 
 			case MOUSE0:
 			case MOUSE1:
-				c = &mouse[i - MOUSE0].crosshair;
-				if (IPPU.RenderThisFrame)
-					S9xDrawCrosshair(S9xGetCrosshair(c->img), c->fg, c->bg, mouse[i - MOUSE0].cur_x, mouse[i - MOUSE0].cur_y);
+			 	// No crosshair in 2002!
 				break;
 
 			case SUPERSCOPE:
-				if (n == 1 && !(superscope.phys_buttons & SUPERSCOPE_OFFSCREEN))
-				{
-					if (superscope.next_buttons & (SUPERSCOPE_FIRE | SUPERSCOPE_CURSOR))
-						DoGunLatch(superscope.x, superscope.y);
-
-					c = &superscope.crosshair;
-					if (IPPU.RenderThisFrame)
-						S9xDrawCrosshair(S9xGetCrosshair(c->img), c->fg, c->bg, superscope.x, superscope.y);
-				}
-
+			 	// No crosshair in 2002!
 				break;
 
 			case TWO_JUSTIFIERS:
-				if (n == 1 && !justifier.offscreen[1])
-				{
-					c = &justifier.crosshair[1];
-					if (IPPU.RenderThisFrame)
-						S9xDrawCrosshair(S9xGetCrosshair(c->img), c->fg, c->bg, justifier.x[1], justifier.y[1]);
-				}
-
-				i = (justifier.buttons & JUSTIFIER_SELECT) ?  1 : 0;
-				goto do_justifier;
+			 	// No crosshair in 2002!
+				break;
 
 			case ONE_JUSTIFIER:
-				i = (justifier.buttons & JUSTIFIER_SELECT) ? -1 : 0;
-
-			do_justifier:
-				if (n == 1)
-				{
-					if (i >= 0 && !justifier.offscreen[i])
-						DoGunLatch(justifier.x[i], justifier.y[i]);
-
-					if (!justifier.offscreen[0])
-					{
-						c = &justifier.crosshair[0];
-						if (IPPU.RenderThisFrame)
-							S9xDrawCrosshair(S9xGetCrosshair(c->img), c->fg, c->bg, justifier.x[0], justifier.y[0]);
-					}
-				}
-
+			 	// No crosshair in 2002!
 				break;
 
 			case MACSRIFLE:
-				if (n == 1)
-				{
-					DoMacsRifleLatch(macsrifle.x, macsrifle.y);
-
-					c = &macsrifle.crosshair;
-					if (IPPU.RenderThisFrame)
-						S9xDrawCrosshair(S9xGetCrosshair(c->img), c->fg, c->bg, macsrifle.x, macsrifle.y);
-				}
-
+			 	// No crosshair in 2002!
 				break;
 
 			default:
@@ -3161,133 +3116,6 @@ void S9xControlEOF (void)
 
 	pad_read_last = pad_read;
 	pad_read      = false;
-}
-
-void S9xSetControllerCrosshair (enum crosscontrols ctl, int8 idx, const char *fg, const char *bg)
-{
-	struct crosshair	*c;
-	int8				fgcolor = -1, bgcolor = -1;
-	int					i, j;
-
-	if (idx < -1 || idx > 31)
-	{
-		fprintf(stderr, "S9xSetControllerCrosshair() called with invalid index\n");
-		return;
-	}
-
-	switch (ctl)
-	{
-		case X_MOUSE1:		c = &mouse[0].crosshair;		break;
-		case X_MOUSE2:		c = &mouse[1].crosshair;		break;
-		case X_SUPERSCOPE:	c = &superscope.crosshair;		break;
-		case X_JUSTIFIER1:	c = &justifier.crosshair[0];	break;
-		case X_JUSTIFIER2:	c = &justifier.crosshair[1];	break;
-		case X_MACSRIFLE:	c = &macsrifle.crosshair;		break;
-		default:
-			fprintf(stderr, "S9xSetControllerCrosshair() called with an invalid controller ID %d\n", ctl);
-			return;
-	}
-
-	if (fg)
-	{
-		fgcolor = 0;
-		if (*fg == 't')
-		{
-			fg++;
-			fgcolor = 16;
-		}
-
-		for (i = 0; i < 16; i++)
-		{
-			for (j = 0; color_names[i][j] && fg[j] == color_names[i][j]; j++) ;
-
-			if (isalnum(fg[j]))
-				continue;
-
-			if (!color_names[i][j])
-				break;
-		}
-
-		fgcolor |= i;
-		if (i > 15 || fgcolor == 16)
-		{
-			fprintf(stderr, "S9xSetControllerCrosshair() called with invalid fgcolor\n");
-			return;
-		}
-	}
-
-	if (bg)
-	{
-		bgcolor = 0;
-		if (*bg == 't')
-		{
-			bg++;
-			bgcolor = 16;
-		}
-
-		for (i = 0; i < 16; i++)
-		{
-			for (j = 0; color_names[i][j] && bg[j] == color_names[i][j]; j++) ;
-
-			if (isalnum(bg[j]))
-				continue;
-
-			if (!color_names[i][j])
-				break;
-		}
-
-		bgcolor |= i;
-		if (i > 15 || bgcolor == 16)
-		{
-			fprintf(stderr, "S9xSetControllerCrosshair() called with invalid bgcolor\n");
-			return;
-		}
-	}
-
-	if (idx != -1)
-	{
-		c->set |= 1;
-		c->img = idx;
-	}
-
-	if (fgcolor != -1)
-	{
-		c->set |= 2;
-		c->fg = fgcolor;
-	}
-
-	if (bgcolor != -1)
-	{
-		c->set |= 4;
-		c->bg = bgcolor;
-	}
-}
-
-void S9xGetControllerCrosshair (enum crosscontrols ctl, int8 *idx, const char **fg, const char **bg)
-{
-	struct crosshair	*c;
-
-	switch (ctl)
-	{
-		case X_MOUSE1:		c = &mouse[0].crosshair;		break;
-		case X_MOUSE2:		c = &mouse[1].crosshair;		break;
-		case X_SUPERSCOPE:	c = &superscope.crosshair;		break;
-		case X_JUSTIFIER1:	c = &justifier.crosshair[0];	break;
-		case X_JUSTIFIER2:	c = &justifier.crosshair[1];	break;
-		case X_MACSRIFLE:	c = &macsrifle.crosshair;		break;
-		default:
-			fprintf(stderr, "S9xGetControllerCrosshair() called with an invalid controller ID %d\n", ctl);
-			return;
-	}
-
-	if (idx)
-		*idx = c->img;
-
-	if (fg)
-		*fg = color_names[c->fg];
-
-	if (bg)
-		*bg = color_names[c->bg];
 }
 
 void S9xControlPreSaveState (struct SControlSnapshot *s)
