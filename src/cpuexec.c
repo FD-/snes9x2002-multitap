@@ -470,9 +470,6 @@ void S9xDoHBlankProcessing()
 
       }
 
-      if (CPU.V_Counter == PPU.ScreenHeight + 3)
-         S9xUpdateJoypads();
-
       if (CPU.V_Counter == FIRST_VISIBLE_LINE)
       {
          Memory.FillRAM[0x4210] = 0;

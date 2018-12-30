@@ -98,12 +98,6 @@ typedef struct
    uint32 ScreenColors [256];
    int     PreviousLine;
    int     CurrentLine;
-   int     Controller;
-   uint32 Joypads[5];
-   uint32 SuperScope;
-   uint32 Mouse[2];
-   int    PrevMouseX[2];
-   int    PrevMouseY[2];
    ClipData Clip [2];
 } InternalPPU;
 
@@ -171,8 +165,6 @@ typedef struct
    short  MatrixD;
    short  CentreX;
    short  CentreY;
-   uint8  Joypad1ButtonReadPos;
-   uint8  Joypad2ButtonReadPos;
 
    uint8  CGADD;
    uint8  FixedColourRed;
@@ -212,7 +204,6 @@ typedef struct
    uint8  CGFLIPRead;
    uint16 OBJNameSelect;
    bool8  Need16x8Mulitply;
-   uint8  Joypad3ButtonReadPos;
    uint8  MouseSpeed[2];
    uint16 SavedOAMAddr2;
    uint16 OAMWriteRegister;
@@ -251,8 +242,6 @@ typedef struct
 //void S9xUpdateScreen ();
 void S9xResetPPU();
 void S9xFixColourBrightness();
-void S9xUpdateJoypads();
-void S9xProcessMouse(int which1);
 void S9xSuperFXExec();
 
 void S9xSetPPU(uint8 Byte, uint16 Address);

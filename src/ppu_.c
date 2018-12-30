@@ -54,6 +54,8 @@
 #include "sdd1.h"
 #include "srtc.h"
 
+#include "port.h"
+#include "controls.h"
 
 #include "fxemu.h"
 #include "fxinst.h"
@@ -1392,17 +1394,12 @@ void S9xSetCPU(uint8 byte, uint16 Address)
 #endif
       switch (Address)
       {
-      case 0x4016:
-         // S9xReset reading of old-style joypads
-         if ((byte & 1) && !(Memory.FillRAM [Address] & 1))
-         {
-            PPU.Joypad1ButtonReadPos = 0;
-            PPU.Joypad2ButtonReadPos = 0;
-            PPU.Joypad3ButtonReadPos = 0;
-         }
-         break;
-      case 0x4017:
-         return;
+      case 0x4016: // JOYSER0
+            S9xSetJoypadLatch(byte & 1);
+            break;
+
+         case 0x4017: // JOYSER1
+            return;
       default:
 #ifdef DEBUGGER
          missing.unknowncpu_write = Address;
@@ -1842,6 +1839,16 @@ uint8 S9xGetCPU(uint16 Address)
 #ifdef VAR_CYCLES
       CPU.Cycles += ONE_CYCLE;
 #endif
+
+#ifdef SNES_JOY_READ_CALLBACKS
+      extern bool8 pad_read;
+      if (Address == 0x4016 || Address == 0x4017)
+      {
+         S9xOnSNESPadRead();
+         pad_read = TRUE;
+      }
+#endif
+
       switch (Address)
       {
       // Secret of the Evermore
@@ -1849,56 +1856,9 @@ uint8 S9xGetCPU(uint16 Address)
       case 0x4001:
          return (0x40);
 
-      case 0x4016:
-      {
-         if (Memory.FillRAM [0x4016] & 1)
-            return (0);
-
-         if (PPU.Joypad1ButtonReadPos >= 16) // Joypad 1 is enabled
-            return 1;
-
-         byte = IPPU.Joypads[0] >> (PPU.Joypad1ButtonReadPos ^ 15);
-         PPU.Joypad1ButtonReadPos++;
-         return (byte & 1);
-      }
-      case 0x4017:
-      {
-         if (Memory.FillRAM [0x4016] & 1)
-         {
-            // MultiPlayer5 adaptor is only allowed to be plugged into port 2
-            switch (IPPU.Controller)
-            {
-            case SNES_MULTIPLAYER5:
-               return (2);
-            case SNES_MOUSE:
-               break;
-            }
-            return (0x00);
-         }
-
-         if (IPPU.Controller == SNES_MULTIPLAYER5)
-         {
-            if (Memory.FillRAM [0x4201] & 0x80)
-            {
-               byte = ((IPPU.Joypads[1] >> (PPU.Joypad2ButtonReadPos ^ 15)) & 1) |
-                      (((IPPU.Joypads[2] >> (PPU.Joypad2ButtonReadPos ^ 15)) & 1) << 1);
-               PPU.Joypad2ButtonReadPos++;
-               return (byte);
-            }
-            else
-            {
-               byte = ((IPPU.Joypads[3] >> (PPU.Joypad3ButtonReadPos ^ 15)) & 1) |
-                      (((IPPU.Joypads[4] >> (PPU.Joypad3ButtonReadPos ^ 15)) & 1) << 1);
-               PPU.Joypad3ButtonReadPos++;
-               return (byte);
-            }
-         }
-         
-         if (PPU.Joypad2ButtonReadPos >= 16) // Joypad 2 is enabled
-            return 1;
-         
-         return ((IPPU.Joypads[1] >> (PPU.Joypad2ButtonReadPos++ ^ 15)) & 1);
-      }
+      case 0x4016 : // JOYSER0
+      case 0x4017 : // JOYSER1
+            return (S9xReadJOYSERn(Address));
       default:
 #ifdef DEBUGGER
          missing.unknowncpu_read = Address;
@@ -2213,9 +2173,6 @@ void S9xResetPPU(void)
 
    PPU.MatrixA = PPU.MatrixB = PPU.MatrixC = PPU.MatrixD = 0;
    PPU.CentreX = PPU.CentreY = 0;
-   PPU.Joypad1ButtonReadPos = 0;
-   PPU.Joypad2ButtonReadPos = 0;
-   PPU.Joypad3ButtonReadPos = 0;
 
    PPU.CGADD = 0;
    PPU.FixedColourRed = PPU.FixedColourGreen = PPU.FixedColourBlue = 0;
@@ -2277,27 +2234,12 @@ void S9xResetPPU(void)
       IPPU.ScreenColors [c] = c;
    S9xFixColourBrightness();
    IPPU.PreviousLine = IPPU.CurrentLine = 0;
-   IPPU.Joypads[0] = IPPU.Joypads[1] = IPPU.Joypads[2] = 0;
-   IPPU.Joypads[3] = IPPU.Joypads[4] = 0;
-   IPPU.SuperScope = 0;
-   IPPU.Mouse[0] = IPPU.Mouse[1] = 0;
-   IPPU.PrevMouseX[0] = IPPU.PrevMouseX[1] = 256 / 2;
-   IPPU.PrevMouseY[0] = IPPU.PrevMouseY[1] = 224 / 2;
 
-   if (Settings.ControllerOption == 0)
-      IPPU.Controller = SNES_MAX_CONTROLLER_OPTIONS - 1;
-   else
-      IPPU.Controller = Settings.ControllerOption - 1;
-   S9xNextController();
+   S9xControlsReset();
 
    for (c = 0; c < 2; c++)
       memset(&IPPU.Clip [c], 0, sizeof(ClipData));
 
-   if (Settings.MouseMaster)
-   {
-      S9xProcessMouse(0);
-      S9xProcessMouse(1);
-   }
    for (c = 0; c < 0x8000; c += 0x100)
       memset(&Memory.FillRAM [c], c >> 8, 0x100);
 
@@ -2308,199 +2250,6 @@ void S9xResetPPU(void)
    memset(&Memory.FillRAM [0x1000], 0, 0x1000);
 }
 
-void S9xProcessMouse(int which1)
-{
-   int x, y;
-   uint32 buttons;
-
-   if (IPPU.Controller == SNES_MOUSE && S9xReadMousePosition(which1, &x, &y, &buttons))
-   {
-      int delta_x, delta_y;
-#define MOUSE_SIGNATURE 0x1
-      IPPU.Mouse [which1] = MOUSE_SIGNATURE |
-                            (PPU.MouseSpeed [which1] << 4) |
-                            ((buttons & 1) << 6) | ((buttons & 2) << 6);
-
-      delta_x = x - IPPU.PrevMouseX[which1];
-      delta_y = y - IPPU.PrevMouseY[which1];
-
-      if (delta_x > 63)
-      {
-         delta_x = 63;
-         IPPU.PrevMouseX[which1] += 63;
-      }
-      else if (delta_x < -63)
-      {
-         delta_x = -63;
-         IPPU.PrevMouseX[which1] -= 63;
-      }
-      else
-         IPPU.PrevMouseX[which1] = x;
-
-      if (delta_y > 63)
-      {
-         delta_y = 63;
-         IPPU.PrevMouseY[which1] += 63;
-      }
-      else if (delta_y < -63)
-      {
-         delta_y = -63;
-         IPPU.PrevMouseY[which1] -= 63;
-      }
-      else
-         IPPU.PrevMouseY[which1] = y;
-
-      if (delta_x < 0)
-      {
-         delta_x = -delta_x;
-         IPPU.Mouse [which1] |= (delta_x | 0x80) << 16;
-      }
-      else
-         IPPU.Mouse [which1] |= delta_x << 16;
-
-      if (delta_y < 0)
-      {
-         delta_y = -delta_y;
-         IPPU.Mouse [which1] |= (delta_y | 0x80) << 24;
-      }
-      else
-         IPPU.Mouse [which1] |= delta_y << 24;
-
-      IPPU.Joypads [1] = IPPU.Mouse [which1];
-   }
-}
-
-void ProcessSuperScope(void)
-{
-   int x, y;
-   uint32 buttons;
-
-   if (IPPU.Controller == SNES_SUPERSCOPE &&
-         S9xReadSuperScopePosition(&x, &y, &buttons))
-   {
-#define SUPERSCOPE_SIGNATURE 0x00ff
-      uint32 scope;
-
-      scope = SUPERSCOPE_SIGNATURE | ((buttons & 1) << (7 + 8)) |
-              ((buttons & 2) << (5 + 8)) | ((buttons & 4) << (3 + 8)) |
-              ((buttons & 8) << (1 + 8));
-      if (x > 255)
-         x = 255;
-      if (x < 0)
-         x = 0;
-      if (y > PPU.ScreenHeight - 1)
-         y = PPU.ScreenHeight - 1;
-      if (y < 0)
-         y = 0;
-
-      PPU.VBeamPosLatched = (uint16)(y + 1);
-      PPU.HBeamPosLatched = (uint16) x;
-      PPU.HVBeamCounterLatched = TRUE;
-      Memory.FillRAM [0x213F] |= 0x40;
-      IPPU.Joypads [1] = scope;
-   }
-}
-
-void S9xNextController(void)
-{
-   switch (IPPU.Controller)
-   {
-   case SNES_MULTIPLAYER5:
-      IPPU.Controller = SNES_JOYPAD;
-      break;
-   case SNES_JOYPAD:
-      if (Settings.MouseMaster)
-      {
-         IPPU.Controller = SNES_MOUSE;
-         break;
-      }
-   case SNES_MOUSE:
-      if (Settings.SuperScopeMaster)
-      {
-         IPPU.Controller = SNES_SUPERSCOPE;
-         break;
-      }
-   case SNES_SUPERSCOPE:
-      if (Settings.MultiPlayer5Master)
-      {
-         IPPU.Controller = SNES_MULTIPLAYER5;
-         break;
-      }
-   default:
-      IPPU.Controller = SNES_JOYPAD;
-      break;
-   }
-}
-
-void S9xUpdateJoypads(void)
-{
-   int i;
-
-   for (i = 0; i < 5; i++)
-   {
-      IPPU.Joypads [i] = S9xReadJoypad(i);
-      if (IPPU.Joypads [i] & SNES_LEFT_MASK)
-         IPPU.Joypads [i] &= ~SNES_RIGHT_MASK;
-      if (IPPU.Joypads [i] & SNES_UP_MASK)
-         IPPU.Joypads [i] &= ~SNES_DOWN_MASK;
-   }
-
-   //touhaiden controller Fix
-   if (SNESGameFixes.TouhaidenControllerFix &&
-         (IPPU.Controller == SNES_JOYPAD || IPPU.Controller == SNES_MULTIPLAYER5))
-   {
-      for (i = 0; i < 5; i++)
-      {
-         if (IPPU.Joypads [i])
-            IPPU.Joypads [i] |= 0xffff0000;
-      }
-   }
-
-   // Read mouse position if enabled
-   if (Settings.MouseMaster)
-   {
-      for (i = 0; i < 2; i++)
-         S9xProcessMouse(i);
-   }
-
-   // Read SuperScope if enabled
-   if (Settings.SuperScopeMaster)
-      ProcessSuperScope();
-
-   if (Memory.FillRAM [0x4200] & 1)
-   {
-      PPU.Joypad1ButtonReadPos = 16;
-      if (Memory.FillRAM [0x4201] & 0x80)
-      {
-         PPU.Joypad2ButtonReadPos = 16;
-         PPU.Joypad3ButtonReadPos = 0;
-      }
-      else
-      {
-         PPU.Joypad2ButtonReadPos = 0;
-         PPU.Joypad3ButtonReadPos = 16;
-      }
-
-      Memory.FillRAM [0x4218] = (uint8) IPPU.Joypads [0];
-      Memory.FillRAM [0x4219] = (uint8)(IPPU.Joypads [0] >> 8);
-      Memory.FillRAM [0x421a] = (uint8) IPPU.Joypads [1];
-      Memory.FillRAM [0x421b] = (uint8)(IPPU.Joypads [1] >> 8);
-      if (Memory.FillRAM [0x4201] & 0x80)
-      {
-         Memory.FillRAM [0x421c] = (uint8) IPPU.Joypads [0];
-         Memory.FillRAM [0x421d] = (uint8)(IPPU.Joypads [0] >> 8);
-         Memory.FillRAM [0x421e] = (uint8) IPPU.Joypads [2];
-         Memory.FillRAM [0x421f] = (uint8)(IPPU.Joypads [2] >> 8);
-      }
-      else
-      {
-         Memory.FillRAM [0x421c] = (uint8) IPPU.Joypads [3];
-         Memory.FillRAM [0x421d] = (uint8)(IPPU.Joypads [3] >> 8);
-         Memory.FillRAM [0x421e] = (uint8) IPPU.Joypads [4];
-         Memory.FillRAM [0x421f] = (uint8)(IPPU.Joypads [4] >> 8);
-      }
-   }
-}
 
 void S9xSuperFXExec(void)
 {

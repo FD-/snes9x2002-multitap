@@ -53,6 +53,7 @@
 #include <stdint.h>
 #include "asmmemfuncs.h"
 #include "tile.h"
+#include "controls.h"
 
 uint32 TileBlank;
 
@@ -631,9 +632,11 @@ void S9xEndScreenRefresh()
       if (IPPU.ColorsChanged)
          IPPU.ColorsChanged = FALSE;
 
-
+      S9xControlEOF();
       S9xDeinitUpdate(IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight,
                       1);
+   } else {
+      S9xControlEOF();
    }
 #ifndef RC_OPTIMIZED
    S9xApplyCheats();

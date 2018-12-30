@@ -58,6 +58,7 @@
 #include "sa1.h"
 #include "srtc.h"
 #include "sdd1.h"
+#include "controls.h"
 
 #include "fxemu.h"
 extern FxInit_s SuperFX;
@@ -951,6 +952,8 @@ void InitROM (bool8_32 Interleaved)
          Memory.CompanyId);
 
    S9xMessage (S9X_INFO, S9X_ROM_INFO, String);
+
+   S9xVerifyControllers();
 }
 
 void FixROMSpeed ()
