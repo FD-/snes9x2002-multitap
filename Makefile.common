@@ -27,6 +27,7 @@ SOURCES := 	$(CORE_DIR)/apu.c \
 				$(CORE_DIR)/spc700.c \
 				$(CORE_DIR)/srtc.c \
 				$(LIBRETRO_DIR)/libretro.c
+SOURCES_CXX := $(CORE_DIR)/controls.cpp
 
 ifeq ($(STATIC_LINKING), 1)
 else

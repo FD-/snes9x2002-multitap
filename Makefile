@@ -316,9 +316,10 @@ LDFLAGS += $(LIBM)
 
 include Makefile.common
 
-OBJECTS := $(SOURCES:.c=.o) $(SOURCES_ASM:.S=.o)
+OBJECTS := $(SOURCES:.c=.o) $(SOURCES_CXX:.cpp=.o) $(SOURCES_ASM:.S=.o)
 
 CFLAGS += $(DEFINES) $(COMMON_DEFINES) $(INCLUDES)
+CXXFLAGS += $(DEFINES) $(COMMON_DEFINES) $(INCLUDES) -lc++
 
 LDFLAGS += $(fpic)
 
@@ -332,7 +333,7 @@ ifneq (,$(findstring msvc,$(platform)))
 else
 	OBJOUT   = -o
 	LINKOUT  = -o
-	LD = $(CC)
+	LD = $(CXX)
 endif
 
 ifeq ($(platform), theos_ios)
@@ -354,6 +355,9 @@ endif
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $(OBJOUT)$@ $<
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $(OBJOUT)$@ $<
 
 %.o: %.S
 	$(CC) $(CFLAGS) -Wa,-I./src/ -c $(OBJOUT)$@ $<
