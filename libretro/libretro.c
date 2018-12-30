@@ -71,11 +71,18 @@
 #include "../src/cheats.h"
 #include "../src/display.h"
 #include "../src/os9x_asm_cpu.h"
+#include "../src/controls.h"
 
 #ifdef _3DS
 void* linearMemAlign(size_t size, size_t alignment);
 void linearFree(void* mem);
 #endif
+
+#define RETRO_DEVICE_JOYPAD_MULTITAP ((1 << 8) | RETRO_DEVICE_JOYPAD)
+#define RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE ((1 << 8) | RETRO_DEVICE_LIGHTGUN)
+#define RETRO_DEVICE_LIGHTGUN_JUSTIFIER ((2 << 8) | RETRO_DEVICE_LIGHTGUN)
+#define RETRO_DEVICE_LIGHTGUN_JUSTIFIER_2 ((3 << 8) | RETRO_DEVICE_LIGHTGUN)
+#define RETRO_DEVICE_LIGHTGUN_MACS_RIFLE ((4 << 8) | RETRO_DEVICE_LIGHTGUN)
 
 #define MAP_BUTTON(id, name) S9xMapButton((id), S9xGetCommandT((name)), false)
 #define MAKE_BUTTON(pad, btn) (((pad)<<4)|(btn))
@@ -84,10 +91,10 @@ void linearFree(void* mem);
 #define BTN_POINTER2 (BTN_POINTER + 1)
 
 static retro_video_refresh_t video_cb = NULL;
-static retro_input_poll_t poll_cb = NULL;
-static retro_input_state_t input_cb = NULL;
 static retro_audio_sample_batch_t audio_batch_cb = NULL;
 static retro_environment_t environ_cb = NULL;
+static retro_input_poll_t poll_cb = NULL;
+static retro_input_state_t input_cb = NULL;
 
 static uint32 joys[5];
 
@@ -210,6 +217,48 @@ static bool use_overscan;
 void retro_set_environment(retro_environment_t cb)
 {
    environ_cb = cb;
+
+   static const struct retro_controller_description port_1[] = {
+        { "None", RETRO_DEVICE_NONE },
+        { "SNES Joypad", RETRO_DEVICE_JOYPAD },
+        { "SNES Mouse", RETRO_DEVICE_MOUSE },
+        { "Multitap", RETRO_DEVICE_JOYPAD_MULTITAP },
+    };
+
+    static const struct retro_controller_description port_2[] = {
+        { "None", RETRO_DEVICE_NONE },
+        { "SNES Joypad", RETRO_DEVICE_JOYPAD },
+        { "SNES Mouse", RETRO_DEVICE_MOUSE },
+        { "Multitap", RETRO_DEVICE_JOYPAD_MULTITAP },
+        { "SuperScope", RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE },
+        { "Justifier", RETRO_DEVICE_LIGHTGUN_JUSTIFIER },
+        { "M.A.C.S. Rifle", RETRO_DEVICE_LIGHTGUN_MACS_RIFLE },
+    };
+
+    static const struct retro_controller_description port_3[] = {
+        { "None", RETRO_DEVICE_NONE },
+        { "SNES Joypad", RETRO_DEVICE_JOYPAD },
+        { "Justifier (2P)", RETRO_DEVICE_LIGHTGUN_JUSTIFIER_2 },
+    };
+
+    static const struct retro_controller_description port_extra[] = {
+        { "None", RETRO_DEVICE_NONE },
+        { "SNES Joypad", RETRO_DEVICE_JOYPAD },
+    };
+
+    static const struct retro_controller_info ports[] = {
+        { port_1, 4 },
+        { port_2, 7 },
+        { port_3, 3 },
+        { port_extra, 2 },
+        { port_extra, 2 },
+        { port_extra, 2 },
+        { port_extra, 2 },
+        { port_extra, 2 },
+        {},
+    };
+
+    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 }
 
 void retro_get_system_info(struct retro_system_info *info)
@@ -236,8 +285,64 @@ uint32 S9xReadJoypad(int which1)
    return joys[which1];
 }
 
-void retro_set_controller_port_device(unsigned in_port, unsigned device)
+static unsigned snes_devices[8];
+void retro_set_controller_port_device(unsigned port, unsigned device)
 {
+    if (port < 8)
+    {
+        int offset = snes_devices[0] == RETRO_DEVICE_JOYPAD_MULTITAP ? 4 : 1;
+        switch (device)
+        {
+            case RETRO_DEVICE_JOYPAD:
+                S9xSetController(port, CTL_JOYPAD, port * offset, 0, 0, 0);
+                snes_devices[port] = RETRO_DEVICE_JOYPAD;
+                break;
+            case RETRO_DEVICE_JOYPAD_MULTITAP:
+                S9xSetController(port, CTL_MP5, port * offset, port * offset + 1, port * offset + 2, port * offset + 3);
+                snes_devices[port] = RETRO_DEVICE_JOYPAD_MULTITAP;
+                break;
+            case RETRO_DEVICE_MOUSE:
+                S9xSetController(port, CTL_MOUSE, port, 0, 0, 0);
+                snes_devices[port] = RETRO_DEVICE_MOUSE;
+                break;
+            case RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE:
+                S9xSetController(port, CTL_SUPERSCOPE, 0, 0, 0, 0);
+                snes_devices[port] = RETRO_DEVICE_LIGHTGUN_SUPER_SCOPE;
+                break;
+            case RETRO_DEVICE_LIGHTGUN_JUSTIFIER:
+                S9xSetController(port, CTL_JUSTIFIER, 0, 0, 0, 0);
+                snes_devices[port] = RETRO_DEVICE_LIGHTGUN_JUSTIFIER;
+                break;
+            case RETRO_DEVICE_LIGHTGUN_JUSTIFIER_2:
+              if ( port == 2 )
+              {
+          S9xSetController(1, CTL_JUSTIFIER, 1, 0, 0, 0);
+                  snes_devices[port] = RETRO_DEVICE_LIGHTGUN_JUSTIFIER_2;
+        }
+        else
+        {
+          printf("Invalid Justifier (2P) assignment to port %d, must be port 2.\n", port);
+          S9xSetController(port, CTL_NONE, 0, 0, 0, 0);
+          snes_devices[port] = RETRO_DEVICE_NONE;
+        }
+                break;
+            case RETRO_DEVICE_LIGHTGUN_MACS_RIFLE:
+                S9xSetController(port, CTL_MACSRIFLE, 0, 0, 0, 0);
+                snes_devices[port] = RETRO_DEVICE_LIGHTGUN_MACS_RIFLE;
+                break;
+            case RETRO_DEVICE_NONE:
+                S9xSetController(port, CTL_NONE, 0, 0, 0, 0);
+                snes_devices[port] = RETRO_DEVICE_NONE;
+                break;
+            default:
+                printf("Invalid device (%d).\n", device);
+                break;
+        }
+        
+        S9xControlsSoftReset();
+    }
+    else if(device != RETRO_DEVICE_NONE)
+        printf("Nonexistent Port (%d).\n", port);
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
@@ -281,8 +386,8 @@ static void snes_init (void)
 	Settings.DisableMasterVolume = FALSE;
 	Settings.Mouse = FALSE;
 	Settings.SuperScope = FALSE;
-	Settings.MultiPlayer5 = FALSE;
-	//	Settings.ControllerOption = SNES_MULTIPLAYER5;
+	Settings.MultiPlayer5Master = TRUE;
+	Settings.ControllerOption = SNES_MULTIPLAYER5;
 	Settings.ControllerOption = 0;
 	
 	Settings.ForceTransparency = FALSE;
@@ -340,18 +445,13 @@ static void snes_init (void)
       exit(1);
    }
 
-   /* controller port 1 */
-   //S9xSetController(0, CTL_JOYPAD, 0, 0, 0, 0);
-   //retro_devices[0] = RETRO_DEVICE_JOYPAD;
+    for (int i = 0; i < 2; i++)
+    {
+        S9xSetController(i, CTL_JOYPAD, i, 0, 0, 0);
+        snes_devices[i] = RETRO_DEVICE_JOYPAD;
+    }
 
-   /* controller port 2 */
-   //S9xSetController(1, CTL_JOYPAD, 1, 0, 0, 0);
-   //retro_devices[1] = RETRO_DEVICE_JOYPAD;
-
-   //S9xUnmapAllControls();
-   //map_buttons();
-   
-   //S9xSetSoundMute(FALSE);
+    S9xUnmapAllControls();
 }
 
 void retro_init (void)
@@ -557,8 +657,84 @@ void retro_cheat_set(unsigned index, bool enable, const char* in_code)
     /* else, silently ignore */
 }
 
+static void init_descriptors(void)
+{
+    struct retro_input_descriptor desc[] = {
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,   "D-Pad Up" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,    "B" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,    "A" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,    "X" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,    "Y" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,    "L" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,    "R" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,    "Start" },
+
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,   "D-Pad Up" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,    "B" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,    "A" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,    "X" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,    "Y" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,    "L" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,    "R" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+        { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,    "Start" },
+
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,   "D-Pad Up" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,    "B" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,    "A" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,    "X" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,    "Y" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,    "L" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,    "R" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+        { 2, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,    "Start" },
+
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,   "D-Pad Up" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,    "B" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,    "A" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,    "X" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,    "Y" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,    "L" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,    "R" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+        { 3, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,    "Start" },
+
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,   "D-Pad Up" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,    "B" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,    "A" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,    "X" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,    "Y" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,    "L" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,    "R" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+        { 4, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START,    "Start" },
+
+        { 0, 0, 0, 0, NULL },
+    };
+
+    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
+}
+
 bool retro_load_game(const struct retro_game_info *game)
 {
+   init_descriptors();
+
    bool8 loaded;
    enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 
