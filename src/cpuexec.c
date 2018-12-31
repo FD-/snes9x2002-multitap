@@ -470,6 +470,12 @@ void S9xDoHBlankProcessing()
 
       }
 
+      if (CPU.V_Counter == PPU.ScreenHeight + 3)   // FIXME: not true
+      {
+         if (Memory.FillRAM[0x4200] & 1)
+            S9xDoAutoJoypad();
+      }
+
       if (CPU.V_Counter == FIRST_VISIBLE_LINE)
       {
          Memory.FillRAM[0x4210] = 0;

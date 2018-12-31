@@ -243,6 +243,7 @@ typedef struct
 void S9xResetPPU();
 void S9xFixColourBrightness();
 void S9xSuperFXExec();
+void S9xDoAutoJoypad(void);
 
 void S9xSetPPU(uint8 Byte, uint16 Address);
 uint8 S9xGetPPU(uint16 Address);
