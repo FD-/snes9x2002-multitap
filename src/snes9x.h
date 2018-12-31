@@ -121,17 +121,6 @@
 #define SNES_Y_MASK      (1 << 14)
 #define SNES_B_MASK      (1 << 15)
 
-enum
-{
-   SNES_MULTIPLAYER5,
-   SNES_JOYPAD,
-   SNES_MOUSE,
-   SNES_SUPERSCOPE,
-   SNES_JUSTIFIER,
-   SNES_JUSTIFIER_2,
-   SNES_MAX_CONTROLLER_OPTIONS
-};
-
 extern bool overclock_cycles;
 extern int one_c, slow_one_c, two_c;
 
@@ -251,9 +240,6 @@ typedef struct
    bool8  TraceUnknownRegisters;
    bool8  TraceDSP;
 
-   // Joystick options
-   bool8  JoystickEnabled;
-
    // ROM timing options (see also H_Max above)
    bool8  ForcePAL;
    bool8  ForceNTSC;
@@ -283,11 +269,7 @@ typedef struct
    bool8  ForceNoC4;
    bool8  ForceSDD1;
    bool8  ForceNoSDD1;
-   bool8  MultiPlayer5;
-   bool8  Mouse;
-   bool8  SuperScope;
    bool8  SRTC;
-   uint32 ControllerOption;
 
    bool8  JustifierMaster;
    bool8  MacsRifleMaster;

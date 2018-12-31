@@ -695,9 +695,6 @@ void InitROM (bool8_32 Interleaved)
    int i;
 
    SuperFX.nRomBanks = Memory.CalculatedSize >> 15;
-   Settings.MultiPlayer5Master = Settings.MultiPlayer5;
-   Settings.MouseMaster = Settings.Mouse;
-   Settings.SuperScopeMaster = Settings.SuperScope;
    Settings.DSP1Master = Settings.ForceDSP1;
    Settings.SuperFX = FALSE;
    Settings.SA1 = FALSE;
@@ -790,7 +787,7 @@ void InitROM (bool8_32 Interleaved)
       {
          //SRAM = ROM + 1024 * 1024 * 4;
          SuperFXROMMap ();
-         Settings.MultiPlayer5Master = FALSE;
+         //Settings.MultiPlayer5Master = FALSE;
          //Settings.MouseMaster = FALSE;
          //Settings.SuperScopeMaster = FALSE;
          Settings.DSP1Master = FALSE;
@@ -804,7 +801,7 @@ void InitROM (bool8_32 Interleaved)
                 (Memory.ROMType & 0xf) > 3 && (Memory.ROMType & 0xf0) == 0x30))
          {
             Settings.SA1 = TRUE;
-            Settings.MultiPlayer5Master = FALSE;
+            //Settings.MultiPlayer5Master = FALSE;
             //Settings.MouseMaster = FALSE;
             //Settings.SuperScopeMaster = FALSE;
             Settings.DSP1Master = FALSE;
@@ -838,7 +835,7 @@ void InitROM (bool8_32 Interleaved)
                      else
                         if (strncmp ((char *) &Memory.ROM [0x7fc0], "ADD-ON BASE CASSETE", 19) == 0)
                         {
-                           Settings.MultiPlayer5Master = FALSE;
+                           //Settings.MultiPlayer5Master = FALSE;
                            Settings.MouseMaster = FALSE;
                            Settings.SuperScopeMaster = FALSE;
                            Settings.DSP1Master = FALSE;

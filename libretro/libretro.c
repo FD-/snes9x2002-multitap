@@ -137,12 +137,12 @@ static int scope_button_count = sizeof( scope_buttons ) / sizeof( int );
 #define BTN_POINTER (RETRO_DEVICE_ID_JOYPAD_R + 1)
 #define BTN_POINTER2 (BTN_POINTER + 1)
 
+retro_log_printf_t log_cb = NULL;
 static retro_video_refresh_t video_cb = NULL;
 static retro_audio_sample_batch_t audio_batch_cb = NULL;
 static retro_environment_t environ_cb = NULL;
 static retro_input_poll_t poll_cb = NULL;
 static retro_input_state_t input_state_cb = NULL;
-static uint32 joys[5];
 
 bool8 ROMAPUEnabled = 0;
 char currentWorkingDir[MAX_PATH+1] = {0};
@@ -324,13 +324,6 @@ void S9xGenerateSound(void)
 {
 }
 
-uint32 S9xReadJoypad(int which1)
-{
-   if (which1 > 4)
-      return 0;
-   return joys[which1];
-}
-
 static unsigned snes_devices[8];
 void retro_set_controller_port_device(unsigned port, unsigned device)
 {
@@ -367,7 +360,8 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
         }
         else
         {
-          printf("Invalid Justifier (2P) assignment to port %d, must be port 2.\n", port);
+          if (log_cb)
+            log_cb(RETRO_LOG_ERROR, "Invalid Justifier (2P) assignment to port %d, must be port 2.\n", port);
           S9xSetController(port, CTL_NONE, 0, 0, 0, 0);
           snes_devices[port] = RETRO_DEVICE_NONE;
         }
@@ -381,14 +375,15 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
                 snes_devices[port] = RETRO_DEVICE_NONE;
                 break;
             default:
-                printf("Invalid device (%d).\n", device);
+                if (log_cb)
+                    log_cb(RETRO_LOG_ERROR, "Invalid device (%d).\n", device);
                 break;
         }
         
         S9xControlsSoftReset();
     }
     else if(device != RETRO_DEVICE_NONE)
-        printf("Nonexistent Port (%d).\n", port);
+        log_cb(RETRO_LOG_INFO, "Nonexistent Port (%d).\n", port);
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
@@ -417,7 +412,6 @@ static void snes_init (void)
    const int safety = 128;
 
    memset(&Settings, 0, sizeof(Settings));
-	Settings.JoystickEnabled = FALSE;
 	Settings.SoundPlaybackRate = samplerate;
 	Settings.Stereo = TRUE;
 	Settings.SoundBufferSize = 0;
@@ -432,11 +426,9 @@ static void snes_init (void)
 	Settings.FrameTime = Settings.FrameTimeNTSC;
 	Settings.DisableSampleCaching = FALSE;
 	Settings.DisableMasterVolume = FALSE;
-	Settings.Mouse = FALSE;
-	Settings.SuperScope = FALSE;
+	Settings.MouseMaster = TRUE;
+	Settings.SuperScopeMaster = TRUE;
 	Settings.MultiPlayer5Master = TRUE;
-	Settings.ControllerOption = SNES_MULTIPLAYER5;
-	Settings.ControllerOption = 0;
 	
 	Settings.ForceTransparency = FALSE;
 	Settings.Transparency = TRUE;
@@ -493,6 +485,7 @@ static void snes_init (void)
       exit(1);
    }
 
+    S9xInitInputDevices();
     for (int i = 0; i < 2; i++)
     {
         S9xSetController(i, CTL_JOYPAD, i, 0, 0, 0);
@@ -505,6 +498,14 @@ static void snes_init (void)
 
 void retro_init (void)
 {
+  struct retro_log_callback log;
+
+  if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
+      log_cb = log.log;
+  else
+      log_cb = NULL;
+
+
    static const struct retro_variable vars[] =
    {
       { "snes9x2002_overclock_cycles", "Reduce Slowdown (Hack, Unsafe, Restart); disabled|compatible|max" },
@@ -527,7 +528,9 @@ void retro_deinit(void)
    S9xDeinitAPU();
    MemoryDeinit();
    S9xGraphicsDeinit();
-   //S9xUnmapAllControls();
+   
+   S9xUnmapAllControls();
+   
    if(GFX.Screen_buffer)
 #ifdef _3DS
       linearFree(GFX.Screen_buffer);
@@ -819,6 +822,8 @@ void retro_run (void)
    IPPU.RenderThisFrame = TRUE;
 #endif
 
+   poll_cb();
+   report_buttons();
    S9xMainLoop();
 //   asm_S9xMainLoop();
    S9xMixSamples(audio_buf, avail);
@@ -828,10 +833,6 @@ void retro_run (void)
    if(!IPPU.RenderThisFrame)
       video_cb(NULL, IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight, GFX_PITCH);
 #endif
-
-   poll_cb();
-
-   report_buttons();
 }
 
 size_t retro_serialize_size (void)
@@ -1095,6 +1096,7 @@ const char *S9xStringInput(const char *message) { return NULL; }
 
 //void Write16(uint16 v, uint8*& ptr) {}
 //uint16 Read16(const uint8*& ptr) { return 0; }
+void S9xInitInputDevices() {}
 const char* S9xChooseFilename(unsigned char name) { return ""; }
 void S9xHandlePortCommand(s9xcommand_t cmd, int16 data1, int16 data2) {}
 bool S9xPollButton(uint32 id, bool *pressed) { return false; }

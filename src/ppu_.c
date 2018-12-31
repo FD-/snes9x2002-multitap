@@ -1960,6 +1960,16 @@ uint8 S9xGetCPU(uint16 Address)
       case 0x421d:
       case 0x421e:
       case 0x421f:
+         // JOY4H
+         #ifdef SNES_JOY_READ_CALLBACKS
+            extern bool8 pad_read;
+            if (Memory.FillRAM[0x4200] & 1)
+            {
+               S9xOnSNESPadRead();
+               pad_read = TRUE;
+            }
+         #endif
+
          // Joypads 1-4 button and direction state.
          return (Memory.FillRAM [Address]);
 
