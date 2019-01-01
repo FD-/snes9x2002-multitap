@@ -427,9 +427,11 @@ static void snes_init (void)
 	Settings.DisableSampleCaching = FALSE;
 	Settings.DisableMasterVolume = FALSE;
 	Settings.MouseMaster = TRUE;
+  Settings.JustifierMaster = TRUE;
 	Settings.SuperScopeMaster = TRUE;
 	Settings.MultiPlayer5Master = TRUE;
-	
+  Settings.MacsRifleMaster = TRUE;
+
 	Settings.ForceTransparency = FALSE;
 	Settings.Transparency = TRUE;
 	Settings.SixteenBit = TRUE;
@@ -455,7 +457,8 @@ static void snes_init (void)
    {
       MemoryDeinit();
       S9xDeinitAPU();
-      fprintf(stderr, "[libsnes]: Failed to init Memory or APU.\n");
+      if (log_cb)
+          log_cb(RETRO_LOG_ERROR, "Failed to init Memory or APU.\n");
       exit(1);
    }
 
@@ -1086,8 +1089,6 @@ bool8 S9xInitUpdate() { return TRUE; }
 bool8 S9xContinueUpdate(int width, int height) { return TRUE; }
 void S9xSetPalette() {}
 void S9xLoadSDD1Data() {}
-bool8 S9xReadMousePosition (int which1_0_to_1, int* x, int* y, uint32* buttons) { return FALSE; }
-bool8 S9xReadSuperScopePosition (int* x, int* y, uint32* buttons) { return FALSE; }
 bool JustifierOffscreen() { return false; }
 
 void S9xToggleSoundChannel (int channel) {}
